@@ -1,0 +1,38 @@
+# Foundry build artifacts
+out/
+cache/
+cache_forge/
+broadcast/
+artifacts/
+
+# Dependencies (installed via forge install, don't commit)
+lib/
+
+# Environment / secrets - NEVER commit real keys
+.env
+.env.*
+!.env.example
+
+# Coverage reports
+lcov.info
+coverage/
+
+# Gas snapshot (optional - some teams DO commit this for CI diffing)
+# .gas-snapshot
+
+# Node (if frontend added later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Slither output (keep the config, ignore raw scan dumps if regenerated often)
+audit/slither-output.txt
+
+# Foundry local chain state
+anvil.log
