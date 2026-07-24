@@ -24,6 +24,7 @@ coverage/
 node_modules/
 package-lock.json
 yarn.lock
+frontend/node_modules
 
 # IDE / OS
 .vscode/
