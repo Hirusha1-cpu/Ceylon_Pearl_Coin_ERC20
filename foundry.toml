@@ -9,7 +9,9 @@ via_ir = false
 
 remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",
-    "forge-std/=lib/forge-std/src/"
+    "forge-std/=lib/forge-std/src/",
+    "@uniswap/v3-core/=lib/v3-core/",
+    "@uniswap/v3-periphery/=lib/v3-periphery/"
 ]
 
 [fuzz]
