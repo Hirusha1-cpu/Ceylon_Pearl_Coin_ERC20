@@ -19,7 +19,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract CreateUniswapPool is Script {
     address constant UNISWAP_FACTORY = 0x0227628f3F023bb0B980b67D528571c95c6DaC1c;
-    address constant WETH = 0xfff9976782d46cc05630d1f6ebab18b2324d6b14;
+    // address constant WETH = 0xfff9976782d46cc05630d1f6ebab18b2324d6b14;
+    address constant WETH = 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14;
     address constant UNISWAP_ROUTER = 0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E;
     uint24 constant POOL_FEE = 3000; // 0.3%
 
