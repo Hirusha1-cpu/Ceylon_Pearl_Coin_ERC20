@@ -182,7 +182,7 @@ export function useSwap(address?: `0x${string}`) {
 
       // do slippage math in BigInt to avoid precision loss
       const slippageBps = BigInt(Math.floor(slippage * 100)); // e.g. 5% -> 500
-      const minOut = estimatedOut - (estimatedOut * slippageBps) / 10000n;
+      const minOut = estimatedOut - (estimatedOut * slippageBps) / BigInt(10000);
 
       if (isBuying) {
         // Paying with native ETH -> tokenIn is WETH, router auto-wraps
@@ -198,10 +198,10 @@ export function useSwap(address?: `0x${string}`) {
             recipient: address,
             amountIn: amount,
             amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0n,
+            sqrtPriceLimitX96: BigInt(0),
           }],
           value: amount,
-          gas: 400000n,
+          gas: BigInt(400000),
         });
         toast.success('Buying CPRL submitted');
       } else {
@@ -216,9 +216,9 @@ export function useSwap(address?: `0x${string}`) {
             recipient: address,
             amountIn: amount,
             amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0n,
+            sqrtPriceLimitX96: BigInt(0),
           }],
-          gas: 400000n,
+          gas: BigInt(400000),
         });
         toast.success('Selling CPRL submitted');
       }
@@ -234,7 +234,7 @@ export function useSwap(address?: `0x${string}`) {
         abi: tokenABI,
         functionName: 'approve',
         args: [UNISWAP_ADDRESSES.router, parseEther(amount)],
-        gas: 100000n,
+        gas: BigInt(100000),
       });
       toast.success('Approved for swap');
     } catch (error: any) {
