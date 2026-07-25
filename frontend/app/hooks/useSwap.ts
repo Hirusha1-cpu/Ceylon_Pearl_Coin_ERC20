@@ -117,7 +117,7 @@ export function useSwap(address?: `0x${string}`) {
   // a swap so the quote/minOut always reflects the real pool state.
   const getFreshPrice = async (): Promise<number> => {
     const result = await refetchSlot0();
-    const freshSlot0 = result.data as readonly [bigint, ...unknown[]] | undefined;
+    const freshSlot0 = result.data as unknown as readonly [bigint, ...unknown[]] | undefined;
     if (!freshSlot0) return parseFloat(price);
 
     const sqrtPriceX96 = freshSlot0[0];
@@ -128,7 +128,7 @@ export function useSwap(address?: `0x${string}`) {
 
   useEffect(() => {
     if (slot0) {
-      const sqrtPriceX96 = slot0[0] as bigint;
+      const sqrtPriceX96 = (slot0 as unknown as readonly [bigint, ...unknown[]])[0];
       const rawPrice = (Number(sqrtPriceX96) / 2 ** 96) ** 2; // token1 per token0
 
       // If CPRL is token0, raw price = ETH per CPRL (what we want directly)
