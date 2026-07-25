@@ -18,6 +18,7 @@ export function SwapPanel() {
     isPending,
     tokenBalance,
     wethBalance,
+    routerAllowance, // <-- correct allowance, scoped to the swap router
     slippage,
     setSlippage,
     getQuote,
@@ -29,16 +30,15 @@ export function SwapPanel() {
   const [amount, setAmount] = useState('');
   const [isApproved, setIsApproved] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const { allowance } = useToken(address);
 
   useEffect(() => {
     if (amount && !isBuying) {
-      const allowanceAmount = parseFloat(allowance || '0');
+      const allowanceAmount = parseFloat(routerAllowance || '0');
       setIsApproved(allowanceAmount >= parseFloat(amount));
     } else {
       setIsApproved(true);
     }
-  }, [amount, allowance, isBuying]);
+  }, [amount, routerAllowance, isBuying]);
 
   useEffect(() => {
     if (amount && parseFloat(amount) > 0) {

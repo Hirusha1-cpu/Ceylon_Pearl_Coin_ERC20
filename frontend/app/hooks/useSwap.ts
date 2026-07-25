@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import tokenABI from '@/contracts/abi/CeylonPearl.json';
 import poolABI from '@/contracts/abi/UniswapV3Pool.json';
 
-// SwapRouter02 ABI - NO deadline field (this is the fix)
+// SwapRouter02 ABI - NO deadline field
 const routerABI = [
   {
     inputs: [
@@ -49,9 +49,6 @@ const routerABI = [
 export function useSwap(address?: `0x${string}`) {
   const [quoteAmount, setQuoteAmount] = useState('0');
   const [price, setPrice] = useState('0');
-  // Bumped default slippage: testnet pool price can drift right after
-  // liquidity changes, and a 0.5% tolerance was causing "Too little received"
-  // reverts even on legitimate trades. 5% gives enough cushion for testing.
   const [slippage, setSlippage] = useState(5);
   const [isToken0, setIsToken0] = useState(true); // is CPRL token0?
 
@@ -70,6 +67,30 @@ export function useSwap(address?: `0x${string}`) {
     args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
+
+  // ---------------------------------------------------------------------
+  // THE ACTUAL ROOT CAUSE FIX: allowance for the SWAP ROUTER specifically.
+  // useToken.ts's `allowance` value checks approval for the STAKING
+  // contract, which is a completely different spender. Checking that value
+  // to decide whether a swap needs approval was the real bug behind the
+  // "STF" (SafeTransferFrom failed) reverts — the UI showed "Sell CPRL"
+  // because staking allowance was sufficient, while router allowance was
+  // actually 0 or too low.
+  // ---------------------------------------------------------------------
+  const {
+    data: routerAllowanceData,
+    refetch: refetchRouterAllowance,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.token,
+    abi: tokenABI,
+    functionName: 'allowance',
+    args: address ? [address, UNISWAP_ADDRESSES.router] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const routerAllowance = routerAllowanceData
+    ? formatEther(routerAllowanceData as bigint)
+    : '0';
 
   const { data: poolAddress } = useReadContract({
     address: UNISWAP_ADDRESSES.factory,
@@ -100,7 +121,6 @@ export function useSwap(address?: `0x${string}`) {
     query: { enabled: !!poolAddress },
   });
 
-  // Figure out token order so price direction is always correct
   useEffect(() => {
     if (CONTRACT_ADDRESSES.token && UNISWAP_ADDRESSES.WETH) {
       setIsToken0(
@@ -112,16 +132,13 @@ export function useSwap(address?: `0x${string}`) {
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
 
-  // Pulls the CURRENT on-chain price directly from slot0, instead of relying
-  // on the (possibly stale) `price` state value. Used right before building
-  // a swap so the quote/minOut always reflects the real pool state.
   const getFreshPrice = async (): Promise<number> => {
     const result = await refetchSlot0();
     const freshSlot0 = result.data as unknown as readonly [bigint, ...unknown[]] | undefined;
     if (!freshSlot0) return parseFloat(price);
 
     const sqrtPriceX96 = freshSlot0[0];
-    const rawPrice = (Number(sqrtPriceX96) / 2 ** 96) ** 2; // token1 per token0
+    const rawPrice = (Number(sqrtPriceX96) / 2 ** 96) ** 2;
     const cprlPerEth = isToken0 ? rawPrice : 1 / rawPrice;
     return cprlPerEth;
   };
@@ -129,10 +146,7 @@ export function useSwap(address?: `0x${string}`) {
   useEffect(() => {
     if (slot0) {
       const sqrtPriceX96 = (slot0 as unknown as readonly [bigint, ...unknown[]])[0];
-      const rawPrice = (Number(sqrtPriceX96) / 2 ** 96) ** 2; // token1 per token0
-
-      // If CPRL is token0, raw price = ETH per CPRL (what we want directly)
-      // If CPRL is token1, raw price = CPRL per ETH, so invert it
+      const rawPrice = (Number(sqrtPriceX96) / 2 ** 96) ** 2;
       const cprlPerEth = isToken0 ? rawPrice : 1 / rawPrice;
       setPrice(cprlPerEth.toFixed(10));
     }
@@ -149,13 +163,10 @@ export function useSwap(address?: `0x${string}`) {
       return;
     }
 
-    // price = ETH per CPRL
     let quote: string;
     if (isBuying) {
-      // paying ETH, receiving CPRL
       quote = (parseFloat(amountIn) / currentPrice).toString();
     } else {
-      // paying CPRL, receiving ETH
       quote = (parseFloat(amountIn) * currentPrice).toString();
     }
     setQuoteAmount(quote);
@@ -170,9 +181,6 @@ export function useSwap(address?: `0x${string}`) {
     try {
       const amount = parseEther(amountIn);
 
-      // Re-fetch the pool price right now, instead of trusting whatever
-      // `price`/`quoteAmount` state happens to hold. This is what fixes
-      // "Too little received" reverts caused by stale quotes.
       const freshPrice = await getFreshPrice();
       if (!freshPrice || freshPrice <= 0) {
         toast.error('Could not fetch current pool price, try again');
@@ -184,14 +192,10 @@ export function useSwap(address?: `0x${string}`) {
         : parseFloat(amountIn) * freshPrice;
 
       const estimatedOut = parseEther(freshQuote.toFixed(18));
-
-      // do slippage math in BigInt to avoid precision loss
-      const slippageBps = BigInt(Math.floor(slippage * 100)); // e.g. 5% -> 500
+      const slippageBps = BigInt(Math.floor(slippage * 100));
       const minOut = estimatedOut - (estimatedOut * slippageBps) / BigInt(10000);
 
       if (isBuying) {
-        // Paying with native ETH -> tokenIn is WETH, router auto-wraps
-        // when value is sent and tokenIn === WETH (SwapRouter02 behavior)
         await writeContract({
           address: UNISWAP_ADDRESSES.router,
           abi: routerABI,
@@ -210,6 +214,18 @@ export function useSwap(address?: `0x${string}`) {
         });
         toast.success('Buying CPRL submitted');
       } else {
+        // Guard against the exact bug we just fixed: re-check the REAL
+        // router allowance right before selling, not a cached value.
+        const freshAllowance = await refetchRouterAllowance();
+        const freshAllowanceValue = freshAllowance.data
+          ? parseFloat(formatEther(freshAllowance.data as bigint))
+          : 0;
+
+        if (freshAllowanceValue < parseFloat(amountIn)) {
+          toast.error('Approval needed — click Approve for Swap first');
+          return;
+        }
+
         await writeContract({
           address: UNISWAP_ADDRESSES.router,
           abi: routerABI,
@@ -242,6 +258,9 @@ export function useSwap(address?: `0x${string}`) {
         gas: BigInt(100000),
       });
       toast.success('Approved for swap');
+      // refresh router allowance immediately so the UI reflects the new
+      // approval instead of waiting for the next unrelated re-render
+      await refetchRouterAllowance();
     } catch (error: any) {
       toast.error(error?.shortMessage || error?.message || 'Approval failed');
     }
@@ -253,6 +272,8 @@ export function useSwap(address?: `0x${string}`) {
     isPending: isPending || isConfirming,
     tokenBalance: tokenBalance ? formatEther(tokenBalance as bigint) : '0',
     wethBalance: wethBalance ? formatEther(wethBalance as bigint) : '0',
+    routerAllowance,
+    refetchRouterAllowance,
     slippage,
     setSlippage,
     getQuote,
