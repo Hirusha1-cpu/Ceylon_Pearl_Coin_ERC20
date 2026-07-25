@@ -1,5 +1,5 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { CONTRACT_ADDRESSES } from '@/utils/constants';
+import { CONTRACT_ADDRESSES } from '../../app/utils/constants';
 import vestingABI from '@/contracts/abi/CeylonPearlVesting.json';
 import { formatEther } from 'ethers';
 import { toast } from 'react-hot-toast';

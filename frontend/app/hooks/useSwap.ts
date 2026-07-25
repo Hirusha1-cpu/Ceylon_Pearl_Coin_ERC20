@@ -1,11 +1,11 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { CONTRACT_ADDRESSES, UNISWAP_ADDRESSES, POOL_FEE } from '@/utils/constants';
+import { CONTRACT_ADDRESSES, UNISWAP_ADDRESSES, POOL_FEE } from '../../app/utils/constants';
 import { formatEther, parseEther } from 'ethers';
 import { toast } from 'react-hot-toast';
 import { useState, useEffect } from 'react';
-import tokenABI from '../../contracts/abi/CeylonPearl.json';
-import routerABI from '../../contracts/abi/IUniswapV3Router.json';
-import poolABI from '../../contracts/abi/UniswapV3Pool.json';
+import tokenABI from '@/contracts/abi/CeylonPearl.json';
+import routerABI from '@/contracts/abi/IUniswapV3Router.json';
+import poolABI from '@/contracts/abi/UniswapV3Pool.json';
 
 export function useSwap(address?: `0x${string}`) {
   const [quoteAmount, setQuoteAmount] = useState('0');
