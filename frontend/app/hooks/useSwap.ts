@@ -162,6 +162,11 @@ export function useSwap(address?: `0x${string}`) {
   };
 
   const swap = async (amountIn: string, isBuying: boolean) => {
+    if (!address) {
+      toast.error('Connect your wallet first');
+      return;
+    }
+
     try {
       const amount = parseEther(amountIn);
 
