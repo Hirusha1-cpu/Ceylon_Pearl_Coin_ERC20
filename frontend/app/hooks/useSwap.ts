@@ -49,7 +49,10 @@ const routerABI = [
 export function useSwap(address?: `0x${string}`) {
   const [quoteAmount, setQuoteAmount] = useState('0');
   const [price, setPrice] = useState('0');
-  const [slippage, setSlippage] = useState(0.5);
+  // Bumped default slippage: testnet pool price can drift right after
+  // liquidity changes, and a 0.5% tolerance was causing "Too little received"
+  // reverts even on legitimate trades. 5% gives enough cushion for testing.
+  const [slippage, setSlippage] = useState(5);
   const [isToken0, setIsToken0] = useState(true); // is CPRL token0?
 
   const { data: tokenBalance } = useReadContract({
@@ -87,7 +90,10 @@ export function useSwap(address?: `0x${string}`) {
     args: [CONTRACT_ADDRESSES.token, UNISWAP_ADDRESSES.WETH, POOL_FEE],
   });
 
-  const { data: slot0 } = useReadContract({
+  const {
+    data: slot0,
+    refetch: refetchSlot0,
+  } = useReadContract({
     address: poolAddress as `0x${string}`,
     abi: poolABI,
     functionName: 'slot0',
@@ -105,6 +111,20 @@ export function useSwap(address?: `0x${string}`) {
 
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
+
+  // Pulls the CURRENT on-chain price directly from slot0, instead of relying
+  // on the (possibly stale) `price` state value. Used right before building
+  // a swap so the quote/minOut always reflects the real pool state.
+  const getFreshPrice = async (): Promise<number> => {
+    const result = await refetchSlot0();
+    const freshSlot0 = result.data as readonly [bigint, ...unknown[]] | undefined;
+    if (!freshSlot0) return parseFloat(price);
+
+    const sqrtPriceX96 = freshSlot0[0];
+    const rawPrice = (Number(sqrtPriceX96) / 2 ** 96) ** 2; // token1 per token0
+    const cprlPerEth = isToken0 ? rawPrice : 1 / rawPrice;
+    return cprlPerEth;
+  };
 
   useEffect(() => {
     if (slot0) {
@@ -144,10 +164,24 @@ export function useSwap(address?: `0x${string}`) {
   const swap = async (amountIn: string, isBuying: boolean) => {
     try {
       const amount = parseEther(amountIn);
-      const estimatedOut = parseEther(quoteAmount || '0');
+
+      // Re-fetch the pool price right now, instead of trusting whatever
+      // `price`/`quoteAmount` state happens to hold. This is what fixes
+      // "Too little received" reverts caused by stale quotes.
+      const freshPrice = await getFreshPrice();
+      if (!freshPrice || freshPrice <= 0) {
+        toast.error('Could not fetch current pool price, try again');
+        return;
+      }
+
+      const freshQuote = isBuying
+        ? parseFloat(amountIn) / freshPrice
+        : parseFloat(amountIn) * freshPrice;
+
+      const estimatedOut = parseEther(freshQuote.toFixed(18));
 
       // do slippage math in BigInt to avoid precision loss
-      const slippageBps = BigInt(Math.floor(slippage * 100)); // e.g. 0.5% -> 50
+      const slippageBps = BigInt(Math.floor(slippage * 100)); // e.g. 5% -> 500
       const minOut = estimatedOut - (estimatedOut * slippageBps) / 10000n;
 
       if (isBuying) {
@@ -167,7 +201,7 @@ export function useSwap(address?: `0x${string}`) {
             sqrtPriceLimitX96: 0n,
           }],
           value: amount,
-          gas: 400000n, // explicit gas limit - avoids MetaMask's broken auto-estimate fallback
+          gas: 400000n,
         });
         toast.success('Buying CPRL submitted');
       } else {
@@ -184,7 +218,7 @@ export function useSwap(address?: `0x${string}`) {
             amountOutMinimum: minOut,
             sqrtPriceLimitX96: 0n,
           }],
-          gas: 400000n, // explicit gas limit - avoids MetaMask's broken auto-estimate fallback
+          gas: 400000n,
         });
         toast.success('Selling CPRL submitted');
       }
@@ -200,7 +234,7 @@ export function useSwap(address?: `0x${string}`) {
         abi: tokenABI,
         functionName: 'approve',
         args: [UNISWAP_ADDRESSES.router, parseEther(amount)],
-        gas: 100000n, // explicit gas limit for ERC20 approve
+        gas: 100000n,
       });
       toast.success('Approved for swap');
     } catch (error: any) {
