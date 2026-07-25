@@ -1,228 +1,131 @@
-# Ceylon Pearl (CPRL) — ERC20 Token System
+# 🪷 Ceylon Pearl (CPRL) — ERC20 Token System
 
-A production-style ERC20 token with role-based minting, gasless approvals
-(EIP-2612), vesting, and staking — built with Foundry, OpenZeppelin, and
-audited with Slither.
+A production-style ERC20 token with role-based minting, gasless approvals (EIP-2612), linear vesting, checkpoint-based staking, and Uniswap V3 integration — built with Foundry, OpenZeppelin, and a Next.js + wagmi frontend.
 
-## Architecture
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=for-the-badge&logo=vercel)](https://ceylon-pearl-coin-erc-20-orcin.vercel.app/)
+[![Network](https://img.shields.io/badge/Network-Sepolia%20Testnet-627EEA?style=for-the-badge&logo=ethereum)](https://sepolia.etherscan.io/)
+
+---
+
+## 🌐 Live Demo
+
+**App URL:** [https://ceylon-pearl-coin-erc-20-orcin.vercel.app/](https://ceylon-pearl-coin-erc-20-orcin.vercel.app/)
+
+> Connect a Sepolia-testnet wallet (MetaMask) to try wallet connect, staking, vesting release, and swapping CPRL ↔ ETH via the embedded Uniswap V3 pool.
+
+---
+
+## 📜 Deployed Contracts (Sepolia Testnet)
+
+| Contract | Address | Etherscan |
+|---|---|---|
+| **CeylonPearl (CPRL) Token** | `0xceF32E08B51e773ee5168Ef77680796482D9F17c` | [View / Verify](https://sepolia.etherscan.io/address/0xceF32E08B51e773ee5168Ef77680796482D9F17c#code) |
+| **CeylonPearlStaking** | `0xcB7143da9141e06AF46036dBA60a6d44D88dE99f` | [View / Verify](https://sepolia.etherscan.io/address/0xcB7143da9141e06AF46036dBA60a6d44D88dE99f#code) |
+| **CeylonPearlVesting** | `0x5bAD373a524cE1A975Fc5b36E1859375F88C77D2` | [View / Verify](https://sepolia.etherscan.io/address/0x5bAD373a524cE1A975Fc5b36E1859375F88C77D2#code) |
+| **CPRL/WETH Uniswap V3 Pool** | `0x37BAC91E9a589B4E9a5dDdC5A8453dC18EfA4677` | [View Pool](https://sepolia.etherscan.io/address/0x37BAC91E9a589B4E9a5dDdC5A8453dC18EfA4677) |
+
+### Uniswap V3 Infrastructure Used (Sepolia)
+
+| Component | Address |
+|---|---|
+| Uniswap V3 Factory | `0x0227628f3F023bb0B980b67D528571c95c6DaC1c` |
+| SwapRouter02 | `0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E` |
+| WETH9 | `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14` |
+
+Pool fee tier: **0.3%** · Initial price: **1 CPRL = 0.001 ETH**
+
+> ℹ️ Click **"View / Verify"** above — if the contract shows a green checkmark it's already verified and you can read the full source directly on Etherscan. If it shows as unverified, see [Contract Verification](#-contract-verification) below to verify it yourself.
+
+---
+
+## 🏗 Architecture
 
 ```
 CeylonPearl (ERC20 + Permit + AccessControl + Capped + Pausable)
         │
         ├── CeylonPearlVesting   (cliff + linear release for team/investors)
         └── CeylonPearlStaking   (reward-per-token checkpoint staking)
+        │
+        └── Uniswap V3 Pool (CPRL/WETH, 0.3% fee)
 ```
 
-Roles: `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE` (vesting/controlled minting),
-`PAUSER_ROLE` (emergency stop), `REWARD_MANAGER_ROLE` (staking rewards).
+**Roles:** `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE` (controlled minting), `PAUSER_ROLE` (emergency stop), `REWARD_MANAGER_ROLE` (staking rewards).
+
+**Frontend stack:** Next.js 16, wagmi + viem, RainbowKit (wallet connect), Uniswap V3 SwapRouter02 integration.
 
 ---
 
-## 1. Prerequisites
+## 🧪 Testing
+
+The contracts are covered by unit, fuzz, and invariant tests using Foundry:
 
 ```bash
-# Install Foundry (forge, cast, anvil) if you don't have it
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
+forge test -vvv                                    # everything
+forge test --match-path "test/unit/*" -vvv          # unit tests
+forge test --match-path "test/fuzz/*" --fuzz-runs 5000 -vvv
+forge test --match-path "test/invariant/*" -vvv     # invariants (cap, balance conservation)
+forge coverage --report summary
+```
 
-# Install Python + Slither for static analysis
-pip install slither-analyzer --break-system-packages
+Static analysis via [Slither](https://github.com/crytic/slither):
 
-# Verify installs
-forge --version
-slither --version
+```bash
+slither src/ --config-file audit/slither.config.json
 ```
 
 ---
 
-## 2. Project Setup
+## 🚀 Local Setup
+
+### Contracts (Foundry)
 
 ```bash
-# From inside Ceylon_Pearl_ERC20/
-git init                      # if not already a git repo
+curl -L https://foundry.paradigm.xyz | bash && foundryup
 forge install foundry-rs/forge-std --no-commit
 forge install OpenZeppelin/openzeppelin-contracts --no-commit
-
-# Copy env template and fill in your own values
-cp .env.example .env
-```
-
-Edit `.env`:
-```
-SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
-PRIVATE_KEY=0xYOUR_TESTNET_ONLY_PRIVATE_KEY
-ETHERSCAN_API_KEY=YOUR_KEY
-```
-
-⚠️ Use a **throwaway testnet wallet** for `PRIVATE_KEY` — never your real one.
-
----
-
-## 3. Build
-
-```bash
+cp .env.example .env   # fill in your own RPC URL, private key, Etherscan API key
 forge build
-forge build --sizes    # check contract bytecode size vs 24kb limit
 ```
+
+### Frontend (Next.js)
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local   # fill in contract addresses + WalletConnect project ID
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 4. Testing
+## ✅ Contract Verification
+
+If a contract above shows as **unverified** on Etherscan, verify it with:
 
 ```bash
-# Run everything (unit + fuzz + invariant), verbose
-forge test -vvv
-
-# Run only unit tests
-forge test --match-path "test/unit/*" -vvv
-
-# Run only fuzz tests, with more runs than default
-forge test --match-path "test/fuzz/*" --fuzz-runs 5000 -vvv
-
-# Run only invariant tests, with deeper exploration
-FOUNDRY_INVARIANT_RUNS=512 FOUNDRY_INVARIANT_DEPTH=100 \
-  forge test --match-path "test/invariant/*" -vvv
-
-# Run one specific test function
-forge test --match-test test_RevertWhen_MintExceedsCap -vvvv
-
-# Coverage report
-forge coverage
-forge coverage --report lcov          # for lcov/genhtml visual report
-forge coverage --report summary       # quick terminal summary
-
-# Gas report + snapshot (commit .gas-snapshot to repo for CI diffing)
-forge snapshot
-forge test --gas-report
-```
-
----
-
-## 5. Security Audit (Slither)
-
-```bash
-# Run Slither on the src/ folder only (ignore lib/ dependencies)
-slither src/ --config-file audit/slither.config.json
-
-# Save output to a file for the README/report
-slither src/ --config-file audit/slither.config.json > audit/slither-output.txt 2>&1
-
-# Check a single contract
-slither src/CeylonPearl.sol
-```
-
-After running: open `audit/slither-output.txt`, review each finding, fix real
-issues in the code, re-run Slither, and document before/after in
-`audit/slither-report.md`.
-
----
-
-## 6. Local Testing with Anvil (local blockchain)
-
-```bash
-# Terminal 1: start a local chain
-anvil
-
-# Terminal 2: deploy to it (anvil's default first private key)
-forge script script/DeployToken.s.sol:DeployToken \
-  --rpc-url http://127.0.0.1:8545 \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  --broadcast
-
-# Interact with the deployed contract using cast
-cast call <TOKEN_ADDRESS> "totalSupply()(uint256)" --rpc-url http://127.0.0.1:8545
-cast send <TOKEN_ADDRESS> "mint(address,uint256)" <TO_ADDRESS> 1000000000000000000000 \
-  --private-key 0xac0974... --rpc-url http://127.0.0.1:8545
-```
-
----
-
-## 7. Deploy to Sepolia Testnet
-
-```bash
-# Step 1: Deploy the core token
-forge script script/DeployToken.s.sol:DeployToken \
-  --rpc-url $SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --broadcast \
-  --verify \
-  --etherscan-api-key $ETHERSCAN_API_KEY
-
-# Copy the printed token address, add it to .env as TOKEN_ADDRESS, then:
-
-# Step 2: Deploy vesting + staking, wired to that token
-source .env   # reload env with TOKEN_ADDRESS set
-forge script script/DeployVestingAndStaking.s.sol:DeployVestingAndStaking \
-  --rpc-url $SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --broadcast \
-  --verify \
-  --etherscan-api-key $ETHERSCAN_API_KEY
-```
-
-### Verify manually (if --verify flag fails)
-
-```bash
-forge verify-contract <TOKEN_ADDRESS> src/CeylonPearl.sol:CeylonPearl \
+forge verify-contract <CONTRACT_ADDRESS> src/CeylonPearl.sol:CeylonPearl \
   --chain sepolia \
   --etherscan-api-key $ETHERSCAN_API_KEY \
   --constructor-args $(cast abi-encode "constructor(uint256,uint256,address)" \
-    1000000000000000000000000 10000000000000000000000000 <ADMIN_ADDRESS>)
+    <INITIAL_SUPPLY> <CAP> <ADMIN_ADDRESS>)
 ```
+
+Repeat with the matching contract path/name and constructor args for `CeylonPearlStaking` and `CeylonPearlVesting`. Constructor argument types for each:
+
+- `CeylonPearl(uint256 initialSupply, uint256 cap_, address admin)`
+- `CeylonPearlStaking(address stakingToken_, address rewardToken_, address admin)`
+- `CeylonPearlVesting(address tokenAddress, address admin)`
 
 ---
 
-## 8. Interacting with the Deployed Contract (cast)
+## ⚠️ Testnet Disclaimer
 
-```bash
-# Read total supply
-cast call <TOKEN_ADDRESS> "totalSupply()(uint256)" --rpc-url $SEPOLIA_RPC_URL
-
-# Read your balance
-cast call <TOKEN_ADDRESS> "balanceOf(address)(uint256)" <YOUR_ADDRESS> --rpc-url $SEPOLIA_RPC_URL
-
-# Transfer tokens
-cast send <TOKEN_ADDRESS> "transfer(address,uint256)" <TO_ADDRESS> 1000000000000000000 \
-  --private-key $PRIVATE_KEY --rpc-url $SEPOLIA_RPC_URL
-
-# Approve staking contract
-cast send <TOKEN_ADDRESS> "approve(address,uint256)" <STAKING_ADDRESS> 1000000000000000000 \
-  --private-key $PRIVATE_KEY --rpc-url $SEPOLIA_RPC_URL
-
-# Stake
-cast send <STAKING_ADDRESS> "stake(uint256)" 1000000000000000000 \
-  --private-key $PRIVATE_KEY --rpc-url $SEPOLIA_RPC_URL
-```
+This project is deployed on **Sepolia testnet only** and uses no real funds. Do not send mainnet ETH or reuse a mainnet private key for this project.
 
 ---
 
-## 9. CI/CD
+## 📄 License
 
-`.github/workflows/ci.yml` runs automatically on every push/PR:
-1. `forge build`
-2. `forge test` (unit + fuzz + invariant)
-3. `forge coverage`
-4. `forge snapshot --check` (fails if gas usage regresses)
-5. Slither (fails build on high-severity findings)
-
-To test the CI workflow locally before pushing:
-```bash
-forge build --sizes && forge test -vvv && forge coverage --report summary
-```
-
----
-
-## Repo layout
-
-```
-Ceylon_Pearl_ERC20/
-├── src/                    # contracts
-├── script/                 # forge deployment scripts
-├── test/
-│   ├── unit/                # isolated function tests
-│   ├── fuzz/                 # random-input property tests
-│   └── invariant/             # always-true property tests + handler
-├── audit/                  # Slither config + findings report
-├── .github/workflows/      # CI pipeline
-└── foundry.toml
-```
+MIT
