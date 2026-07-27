@@ -13,7 +13,7 @@ A production-style ERC20 token with role-based minting, gasless approvals (EIP-2
 
 > Connect a Sepolia-testnet wallet (MetaMask) to try wallet connect, staking, vesting release, and swapping CPRL ↔ ETH via the embedded Uniswap V3 pool.
 
----
+----
 
 ## 📜 Deployed Contracts (Sepolia Testnet)
 
