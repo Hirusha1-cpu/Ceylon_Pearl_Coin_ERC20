@@ -36,7 +36,7 @@ Pool fee tier: **0.3%** · Initial price: **1 CPRL = 0.001 ETH**
 
 > ℹ️ Click **"View / Verify"** above — if the contract shows a green checkmark it's already verified and you can read the full source directly on Etherscan. If it shows as unverified, see [Contract Verification](#-contract-verification) below to verify it yourself.
 
----
+--
 
 ## 🏗 Architecture
 
