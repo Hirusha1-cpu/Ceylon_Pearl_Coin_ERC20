@@ -124,7 +124,7 @@ Repeat with the matching contract path/name and constructor args for `CeylonPear
 
 This project is deployed on **Sepolia testnet only** and uses no real funds. Do not send mainnet ETH or reuse a mainnet private key for this project.
 
----
+--
 
 ## 📄 License
 
