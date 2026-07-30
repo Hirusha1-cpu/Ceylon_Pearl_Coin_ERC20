@@ -53,7 +53,7 @@ CeylonPearl (ERC20 + Permit + AccessControl + Capped + Pausable)
 
 **Frontend stack:** Next.js 16, wagmi + viem, RainbowKit (wallet connect), Uniswap V3 SwapRouter02 integration.
 
---
+-
 
 ## 🧪 Testing
 
