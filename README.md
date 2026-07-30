@@ -73,7 +73,7 @@ Static analysis via [Slither](https://github.com/crytic/slither):
 slither src/ --config-file audit/slither.config.json
 ```
 
---
+-
 
 ## 🚀 Local Setup
 
